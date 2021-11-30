@@ -79,16 +79,20 @@ def sendme_midi():
 
 # Define the MIDI in handler, should be interrupted when pygames support that
 # in case we get backlog, ie retrieves multiple 20ms values for each meter, dump old values and use fresh data
-def midi_transform(msg):
+def midi_transform(msg, type=33):
+    # type=33 => sysex RemoteMeter from mixer
+    # type=127 => sysex heartbeat identification message
     tmp = []                                    # temporary list to hold data until 247
     result = {}                                 # The resulting data dict
     for x in msg:
         if x[0].count(247):                     # 247(F7) is sysex endcharacter.
             tmp.extend(x[0][:x[0].index(247)])
-            #print("midi_transform (tmp):",tmp)
             data = tmp[9:]
-            if len(data) > 0:
+            t=tmp[5]
+            if t == 33 and type==t and len(data) > 0:
                 result[str(tmp[6:9])]=tmp[9:]    # using dict to overwrite older values leaving only last value
+            elif t == type and t == 127:
+                result=tmp
             tmp=[]
         else:
             tmp.extend(x[0])
@@ -161,7 +165,6 @@ def waitfor_midi():
     state=0
     midi_input = 0
     midi_output = 0
-    print_midi_info()
     print("State = 0, validating MIDI layer")
     while state < 1:
         # Just do a simple check to see if midi is initialized
@@ -175,25 +178,34 @@ def waitfor_midi():
     while state < 2:
         # Search through midi devices for a Yamaha mixer .... future check for multiple
         for i in range(pygame.midi.get_count()):
-            (interfaceNr, name, input, output, opened) = pygame.midi.get_device_info(i)
-            if '01V96i' in str(name,'UTF-8') and input:
-                print("attempt read from ",name)
-                m_in = pygame.midi.Input(interfaceNr)
-                pygame.time.wait(2000)
-                if midi_in.poll():
-                    message = midi_transform(midi_in.read(1000))
-                    print message
+            (interface, name, input, output, opened) = pygame.midi.get_device_info(i)
+            if '01V96' in str(name,'UTF-8') and input:
+                print("attempt read from ",i,name)
+                m_in = pygame.midi.Input(i)
+                pygame.time.wait(1000)  # we expect 3-4 messages each second
+                if m_in.poll():
+                    res=midi_transform(m_in.read(100),127)
+                    print(res)
+                    if res[4]==26:
+                        print("Found 01v96i....")
+                        midi_input = i
+                        state = 4
+                        m_in.close()
+                        break
+                    elif res[4]==13:
+                        print("Found 01v96....")
+                        midi_input = i
+                        state = 4
+                        m_in.close()
+                        break
+                m_in.close()
 
-                midi_int = i
-                state = 2
-        if state < 2:
-            pygame.time.wait(2000)
-    print(midi_int)
-    print("State = ", state, ", looking for heartbeat")
-    #while state < 3:
-        # now it gets more complicated. Lets try to find heartbeat from device
-        # We do not know which channel yet so try all input channels
-
+    # Locate MIDI out based on name
+    for i in range(pygame.midi.get_count()):
+        (interface, name, input, output, opened) = pygame.midi.get_device_info(i)
+        if name == pygame.midi.get_device_info(midi_input)[1] and output:
+            midi_output = i
+    return midi_input, midi_output
 
     # start to display a window on top of screen
     # Show list of
@@ -201,14 +213,19 @@ def waitfor_midi():
 # General Setup
 pygame.init()
 pygame.midi.init()
-waitfor_midi()
+#print_midi_info()
+mi,mo = waitfor_midi()
+print("midi = ",mi,mo)
+pygame.midi.init()
+pygame.midi.quit()
+pygame.midi.init()
+#print_midi_info()
 pygame.font.init()
 font_group = pygame.font.SysFont('Comic Sans MS', 30)
 font_vu = pygame.font.SysFont('Arial', 18)
 clock = pygame.time.Clock()
 BLACK = (0,0,0)
 MIDIME = USEREVENT+1
-MidiChannel = 3     # Hardcode for now to use Channel 4
 
 # Screen Setup
 # Insert code here to calculate screen size
@@ -271,8 +288,9 @@ if screen_width > 1795:
 #midi_out = pygame.midi.Output(8)
 
 # Settings for OSX
-midi_in = pygame.midi.Input(3)
-midi_out = pygame.midi.Output(11)
+midi_in = pygame.midi.Input(mi)
+
+midi_out = pygame.midi.Output(mo)
 
 
 # The last thing we do before starting mainloop is to ask mixer to send data
