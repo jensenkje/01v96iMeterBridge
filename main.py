@@ -161,10 +161,14 @@ def midi_transform(msg, type=33):
         if x[0].count(247):                     # 247(F7) is sysex endcharacter.
             tmp.extend(x[0][:x[0].index(247)])
             data = tmp[9:]
-            t=tmp[5]
+            print(data)
+            if len(tmp) >= 5:
+                t=tmp[5]
+            else:
+                t=0
             if t == 33 and type==t and len(data) > 0:
                 result[str(tmp[6:9])]=tmp[9:]    # using dict to overwrite older values leaving only last value
-            elif t == type and t == 127:
+            elif t == 127 and t == type:
                 result=tmp
             tmp=[]
         else:
@@ -305,6 +309,7 @@ BLACK = (0,0,0)
 MIDIME = USEREVENT+1
 vuPosY = 0
 faderPosY = 500
+display_fps = 0
 
 # Screen Setup
 # Insert code here to calculate screen size
@@ -397,6 +402,8 @@ while True:
             if event.key == K_ESCAPE:
                 pygame.quit()
                 sys.exit()
+            if event.key == K_f:
+                display_fps = 1
 
     if midi_in.poll():
         midi_router(midi_transform(midi_in.read(1000)))
@@ -404,4 +411,5 @@ while True:
     pygame.display.flip()
     clock.tick(40)
 
-    fps_counter.update()
+    if display_fps:
+        fps_counter.update()
