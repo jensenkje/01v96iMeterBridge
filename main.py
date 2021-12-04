@@ -6,11 +6,33 @@ from pygame.locals import *
 
 from spritesheet import load_sprite_sheet_array
 
-# Function to detect and find Mixer and wait for confirmation
-def FindMixer():
-    # Loop through all mixer channels and look for a message like  :
-    #   F0 43 10 3E 1A 7F F7
-    return 3
+class FPSCounter:
+    def __init__(self, surface, font, clock, color, bgcolour, pos):
+        self.surface = surface
+        self.font = font
+        self.clock = clock
+        self.pos = pos
+        self.color = color
+        self.bgcolour = bgcolour
+        self.fps = 0
+
+        self.fps_text = self.font.render(str(int(self.clock.get_fps())) + "FPS", False, self.color)
+        self.fps_text_rect = self.fps_text.get_rect(center=(self.pos[0], self.pos[1]))
+
+    def render(self):
+        self.surface.blit(self.fps_text, self.fps_text_rect)
+
+    def update(self):
+        # remove old text
+        self.fps_text = self.font.render(str(self.fps) + "FPS", False, self.bgcolour)
+        self.fps_text_rect = self.fps_text.get_rect(center=(self.pos[0], self.pos[1]))
+        self.surface.blit(self.fps_text, self.fps_text_rect)
+
+        # display new FPS
+        self.fps = round(self.clock.get_fps())
+        self.fps_text = self.font.render(str(self.fps) + "FPS", False, self.color)
+        self.fps_text_rect = self.fps_text.get_rect(center=(self.pos[0], self.pos[1]))
+        self.surface.blit(self.fps_text, self.fps_text_rect)
 
 class meter_axis():
    def __init__(self,spritemap,position):
@@ -230,6 +252,7 @@ def waitfor_midi():
         # Search through midi devices for a Yamaha mixer .... future check for multiple
         for i in range(pygame.midi.get_count()):
             (interface, name, input, output, opened) = pygame.midi.get_device_info(i)
+            print(i,name)
             if '01V96' in str(name,'UTF-8') and input:
                 print("attempt read from ",i,name)
                 m_in = pygame.midi.Input(i)
@@ -250,6 +273,9 @@ def waitfor_midi():
                         m_in.close()
                         break
                 m_in.close()
+        pygame.time.wait(3000)
+        # Reload MIDI stack after each attempt to find new devices ?? Does Not work !
+        pygame.init()
 
     # Locate MIDI out based on name
     for i in range(pygame.midi.get_count()):
@@ -258,8 +284,8 @@ def waitfor_midi():
             midi_output = i
     return midi_input, midi_output
 
-    # start to display a window on top of screen
-    # Show list of
+
+#=========================== MAIN =====================================
 
 # General Setup
 pygame.init()
@@ -297,6 +323,9 @@ screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h))
 #VU_SPRITES = load_sprite_sheet_array("VU1.png",13,1,32,360)
 VU_SPRITES = load_sprite_sheet_array("VU4.png",18,1,20,355)
 #VU_SPRITES2 = load_sprite_sheet_array("VU1.png",13,1,32,360)
+
+# Display FPS
+fps_counter = FPSCounter(screen,font_group,clock,(255,0,0),(0,0,0),(150,10))
 
 # Load and draw the objects of the screen
 #meter1 = meter_vu(VU_SPRITES, (50,50))
@@ -374,3 +403,5 @@ while True:
 
     pygame.display.flip()
     clock.tick(40)
+
+    fps_counter.update()
