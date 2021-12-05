@@ -34,13 +34,7 @@ class FPSCounter:
         self.fps_text_rect = self.fps_text.get_rect(center=(self.pos[0], self.pos[1]))
         self.surface.blit(self.fps_text, self.fps_text_rect)
 
-class meter_axis():
-   def __init__(self,spritemap,position):
-       self.spritemap = spritemap
-       self.position = position
-       self.positionx,self.positiony = self.position
-       screen.blit(spritemap[13], (self.positionx,self.positiony))
-       screen.blit(spritemap[14], (self.positionx+20,self.positiony))
+
 
 
 # Define the WU class
@@ -132,12 +126,14 @@ class fader_group():
         screen.blit(spritemap[17], (self.endX+20, self.startY+30))
         self.endX = self.endX + 45
 
-    def set_midiId( s ):
+    def set_midiId(self,  s ):
         self.midiId = s
 
-    def set_midiCmd( s ):
+    def set_midiCmd(self,  s ):
         self.midiId = s
 
+    def update(self, value):
+        print("fader value : ", value)
 
 def sendme_midi():
         # In this subroutine send the different midi controls
@@ -162,12 +158,12 @@ def midi_transform(msg, type=33):
             tmp.extend(x[0][:x[0].index(247)])
             data = tmp[9:]
             print(data)
-            if len(tmp) >= 5:
+            if len(tmp) >= 5:                   # Bugfix for possible rouge messages from mixer
                 t=tmp[5]
             else:
                 t=0
-            if t == 33 and type==t and len(data) > 0:
-                result[str(tmp[6:9])]=tmp[9:]    # using dict to overwrite older values leaving only last value
+            if t == 33 and type == t and len(data) > 0:
+                result[str(tmp[5:9])] = tmp[9:]   # using dict to overwrite older values leaving only last value
             elif t == 127 and t == type:
                 result=tmp
             tmp=[]
@@ -207,7 +203,7 @@ def get_segments(value):
 
 def midi_router(input):
     for a, b in input.items():
-        #print("router", a, b)
+        print("router", a, b)
         if a == "[4, 0, 0]":
             group5.update(b)
         elif a == "[0, 0, 0]":
