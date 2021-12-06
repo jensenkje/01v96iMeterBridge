@@ -1,3 +1,4 @@
+import ast
 import sys
 
 import pygame
@@ -149,26 +150,29 @@ def sendme_midi():
 # Define the MIDI in handler, should be interrupted when pygames support that
 # in case we get backlog, ie retrieves multiple 20ms values for each meter, dump old values and use fresh data
 def midi_transform(msg, type=33):
+    # input array of midi messages. Message = [[payload],timestamp]
+    # Payload is 4 words in each message, terminated with 247.
     # type=33 => sysex RemoteMeter from mixer
     # type=127 => sysex heartbeat identification message
+    # Header=word 1-5, address=word 6-9, data=word10-wordN
     tmp = []                                    # temporary list to hold data until 247
     result = {}                                 # The resulting data dict
     for x in msg:
-        if x[0].count(247):                     # 247(F7) is sysex endcharacter.
+        if x[0].count(247):                     # Do we have an end of message 247(F7) is sysex endcharacter.
             tmp.extend(x[0][:x[0].index(247)])
-            data = tmp[9:]
-            print(data)
-            if len(tmp) >= 5:                   # Bugfix for possible rouge messages from mixer
-                t=tmp[5]
-            else:
-                t=0
-            if t == 33 and type == t and len(data) > 0:
-                result[str(tmp[5:9])] = tmp[9:]   # using dict to overwrite older values leaving only last value
-            elif t == 127 and t == type:
-                result=tmp
+            #print("tmp=", tmp)  # only for debugging
+            if len(tmp) >= 6:                   # If combined message is shorter than 6 words, throw it away
+                address1 = tmp[5]
+                if address1 == 127 and address1 == type:
+                    return tmp
+                #elif address1 == 33 and type == address1:
+                else:
+                    result[str(tmp[5:9])] = tmp[9:]   # using dict to overwrite older values leaving only last value
             tmp=[]
         else:
-            tmp.extend(x[0])
+            tmp.extend(x[0])                # Message have no termination so keep combining
+
+    #print("result=", result)
     return result
 
 def get_segments(value):
@@ -202,20 +206,37 @@ def get_segments(value):
     return seg
 
 def midi_router(input):
-    for a, b in input.items():
-        print("router", a, b)
-        if a == "[4, 0, 0]":
-            group5.update(b)
-        elif a == "[0, 0, 0]":
-            group1.update(b)
-        elif a == "[0, 0, 16]":
-            group2.update(b)
-        elif a == "[2, 0, 0]":
-            group3.update(b)
-        elif a == "[1, 0, 0]":
-            group4.update(b)
-        elif a == "[0, 0, 32]":
-            group6.update(b)
+    for addrStr, data in input.items():                     # Loop across all midi messages received
+        address = ast.literal_eval(addrStr)                 # workaround to fix string in literals
+        #print("router", address, data)
+        if address[0] == 127:
+            pass
+        elif address[0] == 33:                      # Address say this is METER data
+            if address == [33, 4, 0, 0]:
+                group5.update(data)
+            elif address == [33, 0, 0, 0]:
+                group1.update(data)
+            elif address == [33, 0, 0, 16]:
+                group2.update(data)
+            elif address == [33, 2, 0, 0]:
+                group3.update(data)
+            elif address == [33, 1, 0, 0]:
+                group4.update(data)
+            elif address == [33, 0, 0, 32]:
+                group6.update(data)
+        elif address[0] == 1 and address[1] == 28:      # Fader position
+            fader = address[3]
+            if fader <= 15:
+                print("channel fader 1-16 fader :", fader, address, data)
+            elif fader <= 31:
+                print("channel fader 16-32 fader : ", fader-16, address, data)
+        elif address[0] == 1 and address[1] == 79:
+            print("master fader : ", fader, address, data)
+        elif address[0] == 1 and address[1] == 26:       # Channel on/off button
+            print("channel on/off: ", address, data)
+        else:
+            print("router unknown", address, data)
+
 
 def print_midi_info():
 	for i in range(pygame.midi.get_count()):
@@ -258,15 +279,15 @@ def waitfor_midi():
                 m_in = pygame.midi.Input(i)
                 pygame.time.wait(1000)  # we expect 3-4 messages each second
                 if m_in.poll():
-                    res=midi_transform(m_in.read(100),127)
-                    print(res)
-                    if res[4]==26:
+                    res = midi_transform(m_in.read(100), 127)
+                    print("got result : ", res)
+                    if res[4] == 26:
                         print("Found 01v96i....")
                         midi_input = i
                         state = 4
                         m_in.close()
                         break
-                    elif res[4]==13:
+                    elif res[4] == 13:
                         print("Found 01v96....")
                         midi_input = i
                         state = 4
@@ -275,6 +296,7 @@ def waitfor_midi():
                 m_in.close()
         pygame.time.wait(3000)
         # Reload MIDI stack after each attempt to find new devices ?? Does Not work !
+        pygame.quit()
         pygame.init()
 
     # Locate MIDI out based on name
