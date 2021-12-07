@@ -1,5 +1,6 @@
 import ast
 import sys
+from typing import Union, Any
 
 import pygame
 import pygame.midi
@@ -89,22 +90,34 @@ class meter_group():
         self.meter[index].name(name)
 
 class fader():
-    def __init__(self, spritemap,posx, posy, stereo):
+    def __init__(self, spritemap, posx, posy, stereo):
         self.spritemap = spritemap
         self.stereo = stereo
+        self.volume = -1
+        self.background = spritemap[15]
         if self.stereo:
             self.posx = posx
             self.posy = posy
-            screen.blit(spritemap[15], (self.posx, self.posy))
-            screen.blit(spritemap[15], (self.posx+25, self.posy))
+            screen.blit(self.background, (self.posx, self.posy))
+            screen.blit(self.background, (self.posx+25, self.posy))
             self.posx = self.posx + 15
         else:
             self.posx = posx
             self.posy = posy
-            screen.blit(spritemap[15], (self.posx,self.posy))
+            screen.blit(self.background, (self.posx,self.posy))
+
+    def update(self, value, spriteNum=0):
+        # expected input is the midi value
+        self.volume = value
+        x = (1023 - value) // 3.7                        # Flip it to match x,y coordinates on screen
+        screen.blit(self.background, (self.posx, self.posy))
+        screen.blit(FADERS[spriteNum], (self.posx, self.posy+x+30))
+#        print("fader ", value, x, self.posy+x)
+
 
 class fader_group():
     def __init__(self,name, numfaders, spritemap, startX, startY, stereo=0 ):
+        self.name = name
         self.startX = startX
         self.startY = startY
         self.endX = startX
@@ -115,6 +128,10 @@ class fader_group():
         self.midiId = ""
         self.midiCmd = ""
         self.fader = []
+        self.faderSpriteNum = 0
+        if self.name == "STEREO":
+            self.faderSpriteNum = 1
+
 
         if self.stereo:
             self.endX = self.startX+(numfaders*50)
@@ -133,8 +150,12 @@ class fader_group():
     def set_midiCmd(self,  s ):
         self.midiId = s
 
-    def update(self, value):
-        print("fader value : ", value)
+    def update(self, faderNum, input ):
+        # Expected input is four 7-bit numbers. Fader position in last two only ?
+        value = int(input[2]) * 128 + int(input[3])
+#        print("fader_group ",faderNum,input,value)
+        self.fader[faderNum].update(value, self.faderSpriteNum)
+
 
 def sendme_midi():
         # In this subroutine send the different midi controls
@@ -224,14 +245,17 @@ def midi_router(input):
                 group4.update(data)
             elif address == [33, 0, 0, 32]:
                 group6.update(data)
-        elif address[0] == 1 and address[1] == 28:      # Fader position
+        elif address[0] == 1 and address[1] == 28:      # Fader position 1-32
             fader = address[3]
             if fader <= 15:
                 print("channel fader 1-16 fader :", fader, address, data)
+                fader1.update(fader,data)
             elif fader <= 31:
+                fader2.update(fader-16, data)
                 print("channel fader 16-32 fader : ", fader-16, address, data)
         elif address[0] == 1 and address[1] == 79:
-            print("master fader : ", fader, address, data)
+            print("master fader : ", address[3], address, data)
+            fader5.update(address[3], data)
         elif address[0] == 1 and address[1] == 26:       # Channel on/off button
             print("channel on/off: ", address, data)
         else:
@@ -345,6 +369,8 @@ screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h))
 #screen = pygame.display.set_mode((1680,1050),pygame.FULLSCREEN)
 #VU_SPRITES = load_sprite_sheet_array("VU1.png",13,1,32,360)
 VU_SPRITES = load_sprite_sheet_array("VU4.png",18,1,20,355)
+BUTTONS = load_sprite_sheet_array("buttons.png",6,1,20,20)
+FADERS = load_sprite_sheet_array("faders.png",2,1,20,36)
 #VU_SPRITES2 = load_sprite_sheet_array("VU1.png",13,1,32,360)
 
 # Display FPS
@@ -378,13 +404,13 @@ if screen_width > 1288:
 if screen_width > 1428:
     #meter_axis(VU_SPRITES, (1335,80))
     group5 = meter_group("STEREO",2,(group4.endX,50),VU_SPRITES)
-    fader5 = fader_group("MAIN", 1, VU_SPRITES, fader4.endX, faderPosY, stereo=1)
+    fader5 = fader_group("STEREO", 2, VU_SPRITES, fader4.endX, faderPosY, stereo=0)
     group5.vuname(0," L")
     group5.vuname(1," R")
     #meter_axis(VU_SPRITES, (1382,80))
 if screen_width > 1628:
     group6 = meter_group("Stereo-IN",8,(group5.endX,50),VU_SPRITES)
-    fader6 = fader_group("ST-IN", 4, VU_SPRITES, fader5.endX, faderPosY, stereo=1)
+    fader6 = fader_group("ST-IN", 8, VU_SPRITES, fader5.endX, faderPosY, stereo=0)
     group6.vuname(0,"1L+R")
     group6.vuname(2,"2L+R")
     group6.vuname(4,"3L+R")
