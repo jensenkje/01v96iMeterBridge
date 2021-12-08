@@ -357,7 +357,7 @@ clock = pygame.time.Clock()
 BLACK = (0,0,0)
 MIDIME = USEREVENT+1
 vuPosY = 0
-faderPosY = 655
+faderPosY = 625
 display_fps = 0
 
 # Screen Setup
