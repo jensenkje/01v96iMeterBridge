@@ -287,14 +287,14 @@ def waitfor_midi():
     midi_input = 0
     midi_output = 0
     print("State = 0, validating MIDI layer")
-    while state < 1:
+    #while state < 1:
         # Just do a simple check to see if midi is initialized
-        if pygame.midi.get_init:
-            state = 1
-        else:
-            print("Error: pygame midi not initialized")
-            pygame.init()
-            pygame.time.wait(5000)
+    #    if pygame.midi.get_init:
+    #        state = 1
+    #    else:
+    #        print("Error: pygame midi not initialized")
+    #        pygame.init()
+    #        pygame.time.wait(5000)
     print("State = ", state, ", search for Yamaha devices ...")
     while state < 2:
         # Search through midi devices for a Yamaha mixer .... future check for multiple
