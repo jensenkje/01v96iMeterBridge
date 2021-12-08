@@ -347,8 +347,8 @@ pygame.midi.quit()
 pygame.midi.init()
 # Settings for OSX
 midi_in = pygame.midi.Input(mi)
-#midi_out = pygame.midi.Output(mo)
-midi_out = pygame.midi.Output(17)
+midi_out = pygame.midi.Output(mo)
+#midi_out = pygame.midi.Output(17)      # To be able to see sent midi data in MidiView
 #print_midi_info()
 pygame.font.init()
 font_group = pygame.font.SysFont('Comic Sans MS', 30)
