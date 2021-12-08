@@ -295,6 +295,14 @@ def midi_router(input):
                 fader2.set_button(fader-16, "ON", data)
             elif fader <= 39:
                 fader6.set_button(fader-32, "ON", data)
+        elif address[0] == 3 and address[1] == 46:
+            fader = address[3]
+            if fader <= 15:
+                fader1.set_button(fader, "SOLO", data)
+            elif fader <= 31:
+                fader2.set_button(fader-16, "SOLO", data)
+            elif fader <= 39:
+                fader6.set_button(fader-32, "SOLO", data)
         else:
             print("router unknown", address, data)
 
@@ -380,6 +388,11 @@ def get_active_on():
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 54, 0, x, 0xF7])  # AUX
     for x in range(0,2):
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 77, 0, x, 0xF7])  # MAIN
+
+def get_active_solo():
+    for x in range(0,39):
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 3, 46, 0 , x, 0xF7]) #CH1-32 + ST-IN
+
 
 #=========================== MAIN =====================================
 
@@ -472,6 +485,7 @@ if screen_width > 1795:
 
 # The last thing we do before starting mainloop is to ask mixer to send data
 get_active_select()
+get_active_solo()
 get_active_on()
 sendme_midi()
 pygame.time.set_timer(MIDIME,9000)
