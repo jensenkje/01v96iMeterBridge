@@ -178,6 +178,15 @@ class fader_group():
         value = int(input[2]) * 128 + int(input[3])
         self.fader[faderNum].set_button(button, value)
 
+    def set_sel(self, faderNum):
+        global active_sel
+        print("fadergroup set sel", faderNum)
+        if active_sel != 0:
+            active_sel.set_button("SEL",0)
+        self.fader[faderNum].set_button("SEL",1)
+        active_sel = self.fader[faderNum]
+
+
 def sendme_midi():
         # In this subroutine send the different midi controls
         # that will keep mixer to send mixer data
@@ -287,7 +296,6 @@ def midi_router(input):
         elif address[0] == 1 and address[1] == 57:      # Fader AUX
             fader3.update(address[3], data)
         elif address[0] == 1 and address[1] == 26:       # Channel on/off button
-            print("channel on/off: ", address, data)
             fader = address[3]
             if fader <= 15:
                 fader1.set_button(fader, "ON", data)
@@ -297,12 +305,33 @@ def midi_router(input):
                 fader6.set_button(fader-32, "ON", data)
         elif address[0] == 3 and address[1] == 46:
             fader = address[3]
-            if fader <= 15:
+            if fader <= 15:                                 # CH1-16
                 fader1.set_button(fader, "SOLO", data)
-            elif fader <= 31:
+            elif fader <= 31:                               # CH17-32
                 fader2.set_button(fader-16, "SOLO", data)
-            elif fader <= 39:
+            elif fader <= 39:                               # ST-IN
                 fader6.set_button(fader-32, "SOLO", data)
+        elif address[0] == 3 and address[1] == 47:          # AUX
+            fader = address[3]
+            if fader <= 7:  # ???
+                fader4.set_button(fader, "SOLO", data)
+            elif fader <= 15:  # CH17-32
+                fader3.set_button(fader - 8, "SOLO", data)
+        elif address == [4, 9 ,24, 0]:
+            fader = int(data[3])
+            print("SEL", address,data)
+            if fader <= 15:
+                fader1.set_sel(fader)
+            elif fader <= 31:
+                fader2.set_sel(fader-16)
+            elif fader <= 39:
+                fader6.set_sel(fader - 32)
+            elif fader <= 47:
+                fader3.set_sel(fader-40)
+            elif fader <= 55:
+                fader4.set_sel(fader-48)
+            elif fader <= 57:
+                fader5.set_sel(fader-56)
         else:
             print("router unknown", address, data)
 
@@ -376,13 +405,17 @@ def waitfor_midi():
     return midi_input, midi_output
 
 def get_active_select():
-    return 0
+    print("active select request")
+    midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 4, 9, 24, 0, 0xF7])
+   #midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 0x04, 0x09, 0x18, 0x00, 0xF7])
+
+
 
 def get_active_on():
     # simply send request for all on addresses from 0 to ?
     # Warning: word 3 and 4 is really system dependent ... improve
     for x in range(0,39):
-        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 26, 0 , x, 0xF7]) #CH1-32 + ST-IN
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 26, 0, x, 0xF7]) #CH1-32 + ST-IN
     for x in range(0,8):
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 41, 0, x, 0xF7])  # BUS
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 54, 0, x, 0xF7])  # AUX
@@ -391,7 +424,9 @@ def get_active_on():
 
 def get_active_solo():
     for x in range(0,39):
-        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 3, 46, 0 , x, 0xF7]) #CH1-32 + ST-IN
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 3, 46, 0 , x, 0xF7]) #CH1-32 + ST-IN
+    for x in range(0, 16):
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 3, 47, 0, x, 0xF7])  # CH1-32 + ST-IN
 
 
 #=========================== MAIN =====================================
@@ -484,10 +519,11 @@ if screen_width > 1795:
 
 
 # The last thing we do before starting mainloop is to ask mixer to send data
-get_active_select()
+
 get_active_solo()
 get_active_on()
 sendme_midi()
+get_active_select()
 pygame.time.set_timer(MIDIME,9000)
 
 while True:
