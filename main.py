@@ -97,12 +97,22 @@ class fader():
         self.address = address
         self.posx = posx
         self.posy = posy
+        self.sel = 0
+        self.solo = 0
+        self.on = 0
+        # Draw objects on screen
+        #screen.blit(BUTTONS[0], (self.posx,self.posy-75))       # SEL
+        #screen.blit(BUTTONS[2], (self.posx,self.posy-50))       # SOLO
+        #screen.blit(BUTTONS[4], (self.posx, self.posy-25))      # ON
+        self.set_button("SEL",0)
+        self.set_button("SOLO",0)
+        self.set_button("ON",0)
         screen.blit(self.background, (self.posx,self.posy))
         message = [0xF0, 0x43, 0x30, 0x3E, 0x7F]
         message.extend(self.address)
         message.append(0xF7)
         midi_out.write_sys_ex(0, message)
-        print("message", message)
+        #print("message", message)
 
     def update(self, value, spriteNum=0):
         # expected input is the midi value
@@ -113,6 +123,16 @@ class fader():
 #        print("fader ", value, x, self.posy+x)
 #        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 79, 0, 1, 0xF7])
 
+    def set_button(self, button, value):
+        if button == "SEL":
+            self.sel = value
+            screen.blit(BUTTONS[2+value], (self.posx, self.posy - 75))
+        elif button == "SOLO":
+            self.solo = value
+            screen.blit(BUTTONS[4+value], (self.posx, self.posy - 50))
+        elif button == "ON":
+            self.on = value
+            screen.blit(BUTTONS[0+value], (self.posx, self.posy - 25))
 
 class fader_group():
     def __init__(self, name, startfader, numfaders, spritemap, startX, startY, groupAddress ):
@@ -154,6 +174,9 @@ class fader_group():
 #        print("fader_group ",faderNum,input,value)
         self.fader[faderNum].update(value, self.faderSpriteNum)
 
+    def set_button(self, faderNum, button, input):
+        value = int(input[2]) * 128 + int(input[3])
+        self.fader[faderNum].set_button(button, value)
 
 def sendme_midi():
         # In this subroutine send the different midi controls
@@ -246,21 +269,32 @@ def midi_router(input):
         elif address[0] == 1 and address[1] == 28:      # Fader position 1-32 + ST-IN !!!
             fader = address[3]
             if fader <= 15:                             # Fader 1-16
-                print("channel fader 1-16 fader :", fader, address, data)
                 fader1.update(fader,data)
             elif fader <= 31:                           # Fader 17-32
                 fader2.update(fader-16, data)
-                print("channel fader 16-32 fader : ", fader-16, address, data)
             elif fader <= 39:                           # ST-IN
                 fader6.update(fader-32, data)
+        elif address[0] == 1 and address[1] == 77:      # ON STEREO
+            fader5.set_button(address[3], "ON", data)
         elif address[0] == 1 and address[1] == 79:      # Fader STEREO
             fader5.update(address[3], data)
-        elif address[0] == 1 and address[1] == 57:      # Fader AUX
-            fader3.update(address[3], data)
+        elif address[0] == 1 and address[1] == 41:      # ON BUS
+            fader4.set_button(address[3], "ON", data)
         elif address[0] == 1 and address[1] == 43:      # Fader BUS
             fader4.update(address[3], data)
+        elif address[0] == 1 and address[1] == 54:      # ON AUX
+            fader3.set_button(address[3], "ON", data)
+        elif address[0] == 1 and address[1] == 57:      # Fader AUX
+            fader3.update(address[3], data)
         elif address[0] == 1 and address[1] == 26:       # Channel on/off button
             print("channel on/off: ", address, data)
+            fader = address[3]
+            if fader <= 15:
+                fader1.set_button(fader, "ON", data)
+            elif fader <= 31:
+                fader2.set_button(fader-16, "ON", data)
+            elif fader <= 39:
+                fader6.set_button(fader-32, "ON", data)
         else:
             print("router unknown", address, data)
 
@@ -333,6 +367,19 @@ def waitfor_midi():
             midi_output = i
     return midi_input, midi_output
 
+def get_active_select():
+    return 0
+
+def get_active_on():
+    # simply send request for all on addresses from 0 to ?
+    # Warning: word 3 and 4 is really system dependent ... improve
+    for x in range(0,39):
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 26, 0 , x, 0xF7]) #CH1-32 + ST-IN
+    for x in range(0,8):
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 41, 0, x, 0xF7])  # BUS
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 54, 0, x, 0xF7])  # AUX
+    for x in range(0,2):
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 77, 0, x, 0xF7])  # MAIN
 
 #=========================== MAIN =====================================
 
@@ -359,6 +406,7 @@ MIDIME = USEREVENT+1
 vuPosY = 0
 faderPosY = 625
 display_fps = 0
+active_sel = 0          # initially. Will be active fader object ref later
 
 # Screen Setup
 # Insert code here to calculate screen size
@@ -421,7 +469,10 @@ if screen_width > 1795:
     group7 = meter_group("EFFECT IN", 8, (group6.endX,50),VU_SPRITES)
     group8 = meter_group("EFFECT OUT", 8, (group7.endX,50),VU_SPRITES)
 
+
 # The last thing we do before starting mainloop is to ask mixer to send data
+get_active_select()
+get_active_on()
 sendme_midi()
 pygame.time.set_timer(MIDIME,9000)
 
