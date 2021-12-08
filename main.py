@@ -368,8 +368,8 @@ screen_width = screeninfo.current_w
 screen_height = screeninfo.current_h
 
 
-#screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h),pygame.FULLSCREEN)
-screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h))
+screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h),pygame.FULLSCREEN)
+#screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h))
 #screen = pygame.display.set_mode((screen_width,screen_height))
 #screen = pygame.display.set_mode((3440,1440),pygame.FULLSCREEN)
 #screen = pygame.display.set_mode((2560,1440),pygame.FULLSCREEN)
