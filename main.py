@@ -73,7 +73,7 @@ class meter_group():
 
     def convert(self,data):
         i = []
-        for x in range(0, self.number_vu):
+        for x in range(0, len(data)//2):
             i.append(int(data[x * 2]) * 128 + int(data[x * 2 + 1]))
         return i
     def update(self,value):
@@ -86,6 +86,13 @@ class meter_group():
         for x in range(0,self.number_vu):
             #print("meter",x,"data",data[x])
             self.meter[x].update(get_segments(data[x]))
+    def effect_update(self, value, offset):
+        # Offset for In2 and Out2 to select even
+        if len(value) != self.number_vu:
+            return
+        data = self.convert(value)
+        for x in range(0,len(data)):
+            self.meter[x*2+offset].update(get_segments(data[x]))
     def vuname(self, index, name):
         self.meter[index].name(name)
 
@@ -180,7 +187,7 @@ class fader_group():
 
     def set_sel(self, faderNum):
         global active_sel
-        print("fadergroup set sel", faderNum)
+        # print("fadergroup set sel", faderNum)
         if active_sel != 0:
             active_sel.set_button("SEL",0)
         self.fader[faderNum].set_button("SEL",1)
@@ -196,6 +203,17 @@ def sendme_midi():
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x00, 0x00, 0x00, 0x00, 0x10, 0xF7]) # 1-16
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x00, 0x00, 0x10, 0x00, 0x10, 0xF7]) # 17-32
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x00, 0x00, 0x20, 0x00, 0x10, 0xF7]) # Stereo In
+
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x06, 0x00, 0x00, 0x00, 0x04, 0xF7]) # Stereo In
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x06, 0x01, 0x00, 0x00, 0x04, 0xF7]) # Stereo In
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x06, 0x08, 0x00, 0x00, 0x04, 0xF7]) # Stereo In
+        midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 0x21, 0x06, 0x09, 0x00, 0x00, 0x04, 0xF7]) # Stereo In
+
+        # Effect in, Effect out, Gate, compression ???
+        # F0 43 30 3E 1A 21 06 00 00 00 04 F7
+        # F0 43 30 3E 1A 21 06 01 00 00 04 F7
+        # F0 43 30 3E 1A 21 06 08 00 00 04 F7
+        # F0 43 30 3E 1A 21 06 09 00 00 04 F7
         #print("sendme_midi: ")
 
 # Define the MIDI in handler, should be interrupted when pygames support that
@@ -275,6 +293,14 @@ def midi_router(input):
                 group4.update(data)
             elif address == [33, 0, 0, 32]:
                 group6.update(data)
+            elif address == [0x21, 0x06, 0x00, 0x00]:   # Effect Out1 group8
+                group8.effect_update(data,0)
+            elif address == [0x21, 0x06, 0x01, 0x00]:   # Effect Out2
+                group8.effect_update(data, 1)
+            elif address == [0x21, 0x06, 0x08, 0x00]:   # Effect In1 group7
+                group7.effect_update(data, 0)
+            elif address == [0x21, 0x06, 0x09, 0x00]:   # Effect In2
+                group7.effect_update(data, 1)
         elif address[0] == 1 and address[1] == 28:      # Fader position 1-32 + ST-IN !!!
             fader = address[3]
             if fader <= 15:                             # Fader 1-16
@@ -319,7 +345,7 @@ def midi_router(input):
                 fader3.set_button(fader - 8, "SOLO", data)
         elif address == [4, 9 ,24, 0]:
             fader = int(data[3])
-            print("SEL", address,data)
+            # print("SEL", address,data)
             if fader <= 15:
                 fader1.set_sel(fader)
             elif fader <= 31:
@@ -405,7 +431,6 @@ def waitfor_midi():
     return midi_input, midi_output
 
 def get_active_select():
-    print("active select request")
     midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x1A, 4, 9, 24, 0, 0xF7])
    #midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 0x04, 0x09, 0x18, 0x00, 0xF7])
 
@@ -413,7 +438,7 @@ def get_active_select():
 
 def get_active_on():
     # simply send request for all on addresses from 0 to ?
-    # Warning: word 3 and 4 is really system dependent ... improve
+    # Warning: word 3 and 4 is really system dependent ... improve in future version
     for x in range(0,39):
         midi_out.write_sys_ex(0, [0xF0, 0x43, 0x30, 0x3E, 0x7F, 1, 26, 0, x, 0xF7]) #CH1-32 + ST-IN
     for x in range(0,8):
@@ -463,8 +488,8 @@ print(screeninfo)
 screen_width = screeninfo.current_w
 screen_height = screeninfo.current_h
 
-
-screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h),pygame.FULLSCREEN)
+screen = pygame.display.set_mode((2210,1050),pygame.FULLSCREEN,pygame.SCALED)
+#screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h),pygame.FULLSCREEN)
 #screen = pygame.display.set_mode((screeninfo.current_w,screeninfo.current_h))
 #screen = pygame.display.set_mode((screen_width,screen_height))
 #screen = pygame.display.set_mode((3440,1440),pygame.FULLSCREEN)
@@ -516,7 +541,7 @@ if screen_width > 1795:
     #meter_axis(VU_SPRITES, (1630, 80))
     group7 = meter_group("EFFECT IN", 8, (group6.endX,50),VU_SPRITES)
     group8 = meter_group("EFFECT OUT", 8, (group7.endX,50),VU_SPRITES)
-
+    print("Last pixel on the screen :", group8.endX)
 
 # The last thing we do before starting mainloop is to ask mixer to send data
 
